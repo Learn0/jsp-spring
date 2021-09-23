@@ -1,12 +1,16 @@
 package com.jsp_controller.controller;
 
 import java.io.*;
+import java.lang.reflect.Method;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
 
+import javax.servlet.RequestDispatcher;
 import javax.servlet.ServletConfig;
 import javax.servlet.ServletException;
+import javax.servlet.ServletRequest;
+import javax.servlet.ServletResponse;
 import javax.servlet.http.HttpServlet;
 
 import javax.servlet.http.HttpServletRequest;
@@ -79,9 +83,9 @@ public class DispatcherServlet extends HttpServlet {
 			temp = temp.substring(0, temp.lastIndexOf("/"));
 			temp = temp.substring(0, temp.lastIndexOf("/"));
 			temp = temp + "/" + path;
-
 			WebApplicationContext wc = new WebApplicationContext(temp.substring(1).replace("/", "\\"));
-			clsList = wc.getList();
+			this.clsList = wc.getList();
+
 			for (String s : clsList) {
 				System.out.println(s); // com.jsp_controller.model.A , com.jsp_controller.model.B ,
 			}
@@ -93,6 +97,35 @@ public class DispatcherServlet extends HttpServlet {
 	// URL주소 끝이 .do => 호출되는 메소드
 	protected void service(HttpServletRequest request, HttpServletResponse response)
 			throws ServletException, IOException {
-
+		try {
+			String cmd = request.getRequestURI();
+			cmd = cmd.substring(request.getContextPath().length() + 1);
+			for (String cls : this.clsList) {
+				Class<?> clsName = Class.forName(cls);
+				if (!clsName.isAnnotationPresent(Controller.class))
+					continue;
+				Object obj = clsName.getDeclaredConstructor(new Class[0]).newInstance(new Object[0]);
+				Method[] methods = clsName.getDeclaredMethods();
+				byte b;
+				int i;
+				Method[] arrayOfMethod1;
+				for (i = (arrayOfMethod1 = methods).length, b = 0; b < i;) {
+					Method m = arrayOfMethod1[b];
+					RequestMapping rm = m.<RequestMapping>getAnnotation(RequestMapping.class);
+					if (rm.value().equals(cmd)) {
+						String jsp = (String) m.invoke(obj, new Object[] { request, response });
+						if (jsp.startsWith("redirect")) {
+							response.sendRedirect(jsp.substring(jsp.indexOf(":") + 1));
+						} else {
+							RequestDispatcher rd = request.getRequestDispatcher(jsp);
+							rd.forward((ServletRequest) request, (ServletResponse) response);
+						}
+						return;
+					}
+					b++;
+				}
+			}
+		} catch (Exception exception) {
+		}
 	}
 }
